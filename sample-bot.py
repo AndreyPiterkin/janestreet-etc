@@ -34,6 +34,7 @@ team_name = "BREAKFASTBLEND"
 
 BOND_BUY = []
 BOND_SELL = []
+FLIP = True
 
 VAL_COUNT = 0
 VALBZ_COUNT = 0
@@ -61,7 +62,7 @@ CURR_ORDER_ID = 0
 RECENT_BOND_PNL = 0
 
 def handleFill(message):
-    global VALBZ_COUNT, VAL_COUNT
+    global VALBZ_COUNT, VAL_COUNT, FLIP
     if message["symbol"] == "VALE":
         if message["dir"] == "BUY":
             VAL_COUNT += int(message["size"])
@@ -73,6 +74,10 @@ def handleFill(message):
         else:
             VALBZ_COUNT -= int(message["size"])
 
+    if VAL_COUNT == 10 and VALBZ_COUNT == -10:
+        FLIP = not FLIP
+    if VAL_COUNT == -10 and VALBZ_COUNT == 10:
+        FLIP = not FLIP
 
 def handleBook(message):
     global BOND_BUY, BOND_SELL, CURR_ORDER_ID, VAL_BUY, VAL_SELL, VALBZ_BUY, VALBZ_SELL
@@ -127,38 +132,28 @@ def handleXLF(exchange):
 
 
 def handleADR(exchange):
-    global BOND_BUY, BOND_SELL, CURR_ORDER_ID, VAL_BUY, VAL_SELL, VALBZ_BUY, VAL_SELL
+    global BOND_BUY, BOND_SELL, CURR_ORDER_ID, VAL_BUY, VAL_SELL, VALBZ_BUY, VAL_SELL, FLIP
         
     if VAL_BUY and VAL_SELL and VALBZ_BUY and VALBZ_SELL:
-        priceval = (VAL_BUY[0][0] + VAL_SELL[0][0])//2
+        # priceval = (VAL_BUY[0][0] + VAL_SELL[0][0])//2
         pricevalbz = (VALBZ_BUY[0][0] + VALBZ_SELL[0][0])//2
         # print(priceval, pricevalbz)
-        if priceval - pricevalbz > ADR_CONVERT + 2:
-            print("Bought CS -> ADR")
-            exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.BUY, pricevalbz, 1)
+        if FLIP:
+        # print("Bought CS -> ADR")
+            exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.BUY, pricevalbz, 10)
             CURR_ORDER_ID += 1
- 
-            exchange.send_add_message(CURR_ORDER_ID, "VALE", Dir.SELL, priceval, 1)
+            # exchange.send_convert_message(CURR_ORDER_ID, "VALE", Dir.BUY, 10)
+            # CURR_ORDER_ID += 1
+            exchange.send_add_message(CURR_ORDER_ID, "VALE", Dir.SELL, pricevalbz+1, 10)
             CURR_ORDER_ID += 1
-           
-        if pricevalbz - priceval > ADR_CONVERT + 2:
-            print("Bought ADR -> CS")
-            exchange.send_add_message(CURR_ORDER_ID, "VALE", Dir.BUY, priceval, 1)
-            CURR_ORDER_ID += 1
-            exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.SELL, pricevalbz, 1)   
-            CURR_ORDER_ID += 1
-        
-        if VAL_COUNT == -10 and VALBZ_COUNT == 10:
-            exchange.send_convert_message(CURR_ORDER_ID, "VALE", Dir.BUY, 10)
-            CURR_ORDER_ID += 1
-            VAL_COUNT = 0
-            VALBZ_COUNT = 0
 
-        if VAL_COUNT == 10 and VALBZ_COUNT == -10:
-            exchange.send_convert_message(CURR_ORDER_ID, "VALE", Dir.SELL, 10)
+        else:
+            exchange.send_add_message(CURR_ORDER_ID, "VALE", Dir.BUY, pricevalbz, 10)
             CURR_ORDER_ID += 1
-            VAL_COUNT = 0
-            VALBZ_COUNT = 0
+            # exchange.send_convert_message(CURR_ORDER_ID, "VALE", Dir.SELL, 10)
+            # CURR_ORDER_ID += 1
+            exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.SELL, pricevalbz+1, 10)   
+            CURR_ORDER_ID += 1
 
 
 def handleBond(exchange):
@@ -166,17 +161,15 @@ def handleBond(exchange):
     # 0 is buy
     # 1 is sell
 
+    # if BOND_BUY and BOND_BUY[0][0] > 1000:
+    exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.SELL, 1001, 10)
+    RECENT_BOND_PNL += 10 * 1001
+    CURR_ORDER_ID += 1
 
-
-    if BOND_BUY and BOND_BUY[0][0] > 1000:
-        exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.SELL, 1001, 10)
-        RECENT_BOND_PNL += 10 * 1001
-        CURR_ORDER_ID += 1
-
-    if BOND_SELL and BOND_SELL[0][0] < 1000:
-        exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.BUY, 999, 10)
-        RECENT_BOND_PNL -= 10 * 1001
-        CURR_ORDER_ID += 1 
+# if BOND_SELL and BOND_SELL[0][0] < 1000:
+    exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.BUY, 999, 10)
+    RECENT_BOND_PNL -= 10 * 1001
+    CURR_ORDER_ID += 1 
 
 def print_bond_pnl():
     global RECENT_BOND_PNL

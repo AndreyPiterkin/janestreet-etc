@@ -11,8 +11,6 @@ import time
 import socket
 import json
 
-from threading import Thread
-
 class Dir(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
@@ -53,13 +51,18 @@ WFC_SELL = []
 XLF_SELL = []
 XLF_BUY = []
 
-
 ADR_CONVERT = 10
 XLF_CONVERT = 100
 
 CURR_ORDER_ID = 0
 
-RECENT_BOND_PNL = 0
+STOCK_RUNNING_SUM = {
+    'MS': 0,
+    'GS': 0,
+    'WFC': 0
+}
+STOCK_RUNNING_CNT = 0
+AVERAGES = []
 
 def handleFill(message):
     global VALBZ_COUNT, VAL_COUNT, FLIP
@@ -127,58 +130,37 @@ def handleXLF(exchange):
             exchange.send_add_message(CURR_ORDER_ID, "GS", Dir.SELL, pricegs, 2)
             exchange.send_add_message(CURR_ORDER_ID, "MS", Dir.SELL, pricegs, 3)
             exchange.send_add_message(CURR_ORDER_ID, "WFC", Dir.SELL, pricegs, 2)
-            
-            
-
 
 def handleADR(exchange):
     global BOND_BUY, BOND_SELL, CURR_ORDER_ID, VAL_BUY, VAL_SELL, VALBZ_BUY, VAL_SELL, FLIP
         
     if VAL_BUY and VAL_SELL and VALBZ_BUY and VALBZ_SELL:
-        # priceval = (VAL_BUY[0][0] + VAL_SELL[0][0])//2
-        pricevalbz = (VALBZ_BUY[0][0] + VALBZ_SELL[0][0])//2
-        # print(priceval, pricevalbz)
+        pricevalbz = (VALBZ_BUY[0][0] + VALBZ_SELL[0][0]) // 2
         if FLIP:
-        # print("Bought CS -> ADR")
             exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.BUY, pricevalbz, 10)
             CURR_ORDER_ID += 1
-            # exchange.send_convert_message(CURR_ORDER_ID, "VALE", Dir.BUY, 10)
-            # CURR_ORDER_ID += 1
             exchange.send_add_message(CURR_ORDER_ID, "VALE", Dir.SELL, pricevalbz+1, 10)
             CURR_ORDER_ID += 1
-
         else:
             exchange.send_add_message(CURR_ORDER_ID, "VALE", Dir.BUY, pricevalbz, 10)
             CURR_ORDER_ID += 1
-            # exchange.send_convert_message(CURR_ORDER_ID, "VALE", Dir.SELL, 10)
-            # CURR_ORDER_ID += 1
             exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.SELL, pricevalbz+1, 10)   
             CURR_ORDER_ID += 1
 
-
 def handleBond(exchange):
-    global BOND_BUY, BOND_SELL, CURR_ORDER_ID, RECENT_BOND_PNL
+    global BOND_BUY, BOND_SELL, CURR_ORDER_ID
     # 0 is buy
     # 1 is sell
 
-    # if BOND_BUY and BOND_BUY[0][0] > 1000:
     exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.SELL, 1001, 10)
-    RECENT_BOND_PNL += 10 * 1001
     CURR_ORDER_ID += 1
 
-# if BOND_SELL and BOND_SELL[0][0] < 1000:
     exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.BUY, 999, 10)
-    RECENT_BOND_PNL -= 10 * 1001
-    CURR_ORDER_ID += 1 
-
-def print_bond_pnl():
-    global RECENT_BOND_PNL
-    while True:
-        print('Bond PNL in the last 15 seconds =', RECENT_BOND_PNL)
-        RECENT_BOND_PNL = 0
-        time.sleep(15)
+    CURR_ORDER_ID += 1
 
 def main():
+    global STOCK_RUNNING_CNT
+
     args = parse_arguments()
     exchange = ExchangeConnection(args=args)
 
@@ -224,58 +206,41 @@ def main():
         # your code handle the messages and just print the information
         # important for you!
         if message["type"] == "close":
-            print("The round has ended")
+            all_stock_avg = sum(STOCK_RUNNING_SUM.values()) / STOCK_RUNNING_CNT
+            AVERAGES.append(all_stock_avg)
+            print('The round has ended, averages =', AVERAGES)
+
+            STOCK_RUNNING_SUM["GS"] = 0
+            STOCK_RUNNING_SUM["MS"] = 0
+            STOCK_RUNNING_SUM["WFC"] = 0
+            STOCK_RUNNING_CNT = 0
             break
         elif message["type"] == "error":
             print(message)
         elif message["type"] == "reject":
-            # print(message)
             pass
         elif message["type"] == "fill":
-            print("Filled: " + str(message))
             handleFill(message)
             pass
         elif message["type"] == "book":
             handleBook(message)
-            # print(message)
         elif message['type'] == 'ack':
-            # print(message)
             pass
         elif message['type'] == 'trade':
-            # print(message)
-            pass
+            if message['symbol'] in STOCK_RUNNING_SUM:
+                STOCK_RUNNING_SUM[message['symbol']] += message['price'] * message['size']
+                STOCK_RUNNING_CNT += message['size']
     
         handleBond(exchange)
         handleADR(exchange)
         # handleXLF(exchange)
         time.sleep(0.01)
-            # if message["symbol"] == "VALE":
-
-            #     def best_price(side):
-            #         if message[side]:
-            #             return message[side][0][0]
-
-            #     vale_bid_price = best_price("buy")
-            #     vale_ask_price = best_price("sell")
-
-            #     now = time.time()
-
-            #     if now > vale_last_print_time + 1:
-            #         vale_last_print_time = now
-            #         print(
-            #             {
-            #                 "vale_bid_price": vale_bid_price,
-            #                 "vale_ask_price": vale_ask_price,
-            #             }
-            #         )
-
 
 # ~~~~~============== PROVIDED CODE ==============~~~~~
 
 # You probably don't need to edit anything below this line, but feel free to
 # ask if you have any questions about what it is doing or how it works. If you
 # do need to change anything below this line, please feel free to
-
 
 class ExchangeConnection:
     def __init__(self, args):

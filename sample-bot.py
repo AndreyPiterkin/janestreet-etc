@@ -33,9 +33,10 @@ team_name = "BREAKFASTBLEND"
 # code is intended to be a working example, but it needs some improvement
 # before it will start making good trades!
 
-BOND = [[], []]
-currOrderId = 0
+BONDBUY= []
+BONDSELL = []
 
+currOrderId = 0
 
 def main():
     args = parse_arguments()
@@ -92,8 +93,11 @@ def main():
             print(message)
         elif message["type"] == "book":
             handleBook(message)
-        
+        elif message['type'] == 'ack':
+            print(message)
+    
         handleBond(exchange)
+        time.sleep(0.01)
             # if message["symbol"] == "VALE":
 
             #     def best_price(side):
@@ -193,7 +197,6 @@ class ExchangeConnection:
                 "WARNING: You are sending messages too frequently. The exchange will start ignoring your messages. Make sure you are not sending a message in response to every exchange message."
             )
 
-
 def parse_arguments():
     test_exchange_port_offsets = {"prod-like": 0, "slower": 1, "empty": 2}
 
@@ -231,7 +234,6 @@ def parse_arguments():
 
     return args
 
-
 if __name__ == "__main__":
     # Check that [team_name] has been updated.
     assert (
@@ -242,22 +244,24 @@ if __name__ == "__main__":
         try:
             main()
         except socket.error:
-            print("err")
-            time.sleep(1)
+            print("Can't connect to socket")
+            time.sleep(0.1)
 
-
-def handleBook(message, exchange):
+def handleBook(message):
     if message["symbol"] == "BOND":
-        BOND[Dir.BUY] = message["buy"]
-        BOND[Dir.SELL] = message["sell"]
+        BONDBUY = message["buy"]
+        BONDSELL = message["sell"]
+    
 
 def handleBond(exchange : ExchangeConnection):
     # 0 is buy
     # 1 is sell
-    if BOND[0][0][0] < 1000:
+    if BONDBUY[0][0] < 1000:
         exchange.send_add_message(currOrderId, "BOND", Dir.BUY, 999, 10)
-        currOrderId += 1
+        currOrderId += 1  
 
-    if BOND[1][0][0] > 1000:
+    if BONDSELL[0][0] > 1000:
         exchange.send_add_message(currOrderId, "BOND", Dir.SELL, 1001, 10)
         currOrderId += 1  
+
+    

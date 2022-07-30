@@ -29,6 +29,7 @@ team_name = "BREAKFASTBLEND"
 
 def main():
     args = parse_arguments()
+
     exchange = ExchangeConnection(args=args)
 
     # Store and print the "hello" message received from the exchange. This
@@ -38,16 +39,16 @@ def main():
     hello_message = exchange.read_message()
     print("First message from exchange:", hello_message)
 
-    # # Send an order for BOND at a good price, but it is low enough that it is
-    # # unlikely it will be traded against. Maybe there is a better price to
-    # # pick? Also, you will need to send more orders over time.
-    # exchange.send_add_message(order_id=1, symbol="BOND", dir=Dir.BUY, price=990, size=1)
+    # Send an order for BOND at a good price, but it is low enough that it is
+    # unlikely it will be traded against. Maybe there is a better price to
+    # pick? Also, you will need to send more orders over time.
+    exchange.send_add_message(order_id=1, symbol="BOND", dir=Dir.BUY, price=990, size=1)
 
     # Set up some variables to track the bid and ask price of a symbol. Right
-    # # now this doesn't track much information, but it's enough to get a sense
-    # # of the VALE market.
-    # vale_bid_price, vale_ask_price = None, None
-    # vale_last_print_time = time.time()
+    # now this doesn't track much information, but it's enough to get a sense
+    # of the VALE market.
+    vale_bid_price, vale_ask_price = None, None
+    vale_last_print_time = time.time()
 
     # Here is the main loop of the program. It will continue to read and
     # process messages in a loop until a "close" message is received. You
@@ -229,4 +230,9 @@ if __name__ == "__main__":
         team_name != "REPLACEME"
     ), "Please put your team name in the variable [team_name]."
 
-    main()
+    while True:
+        try:
+            main()
+        except socket.error:
+            print("err")
+            time.sleep(1)

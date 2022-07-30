@@ -36,16 +36,6 @@ team_name = "BREAKFASTBLEND"
 BOND = [[], []]
 currOrderId = 0
 
-def handleBook(message, exchange):
-    if message["symbol"] == "BOND":
-        BOND[Dir.BUY] = message["buy"]
-        BOND[Dir.SELL] = message["sell"]
-
-def handleBond(exchange):
-    # 0 is buy
-    # 1 is sell
-    if BOND[0][0][0] < 1000:
-        send_
 
 def main():
     args = parse_arguments()
@@ -101,25 +91,28 @@ def main():
         elif message["type"] == "fill":
             print(message)
         elif message["type"] == "book":
-            if message["symbol"] == "VALE":
+            handleBook(message)
+        
+        handleBond(exchange)
+            # if message["symbol"] == "VALE":
 
-                def best_price(side):
-                    if message[side]:
-                        return message[side][0][0]
+            #     def best_price(side):
+            #         if message[side]:
+            #             return message[side][0][0]
 
-                vale_bid_price = best_price("buy")
-                vale_ask_price = best_price("sell")
+            #     vale_bid_price = best_price("buy")
+            #     vale_ask_price = best_price("sell")
 
-                now = time.time()
+            #     now = time.time()
 
-                if now > vale_last_print_time + 1:
-                    vale_last_print_time = now
-                    print(
-                        {
-                            "vale_bid_price": vale_bid_price,
-                            "vale_ask_price": vale_ask_price,
-                        }
-                    )
+            #     if now > vale_last_print_time + 1:
+            #         vale_last_print_time = now
+            #         print(
+            #             {
+            #                 "vale_bid_price": vale_bid_price,
+            #                 "vale_ask_price": vale_ask_price,
+            #             }
+            #         )
 
 
 # ~~~~~============== PROVIDED CODE ==============~~~~~
@@ -251,3 +244,20 @@ if __name__ == "__main__":
         except socket.error:
             print("err")
             time.sleep(1)
+
+
+def handleBook(message, exchange):
+    if message["symbol"] == "BOND":
+        BOND[Dir.BUY] = message["buy"]
+        BOND[Dir.SELL] = message["sell"]
+
+def handleBond(exchange : ExchangeConnection):
+    # 0 is buy
+    # 1 is sell
+    if BOND[0][0][0] < 1000:
+        exchange.send_add_message(currOrderId, "BOND", Dir.BUY, 999, 10)
+        currOrderId += 1
+
+    if BOND[1][0][0] > 1000:
+        exchange.send_add_message(currOrderId, "BOND", Dir.SELL, 1001, 10)
+        currOrderId += 1  

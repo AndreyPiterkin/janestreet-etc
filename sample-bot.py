@@ -11,6 +11,13 @@ import time
 import socket
 import json
 
+
+
+class Dir(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
 # ~~~~~============== CONFIGURATION  ==============~~~~~
 # Replace "REPLACEME" with your team name!
 team_name = "BREAKFASTBLEND"
@@ -26,6 +33,19 @@ team_name = "BREAKFASTBLEND"
 # code is intended to be a working example, but it needs some improvement
 # before it will start making good trades!
 
+BOND = [[], []]
+currOrderId = 0
+
+def handleBook(message, exchange):
+    if message["symbol"] == "BOND":
+        BOND[Dir.BUY] = message["buy"]
+        BOND[Dir.SELL] = message["sell"]
+
+def handleBond(exchange):
+    # 0 is buy
+    # 1 is sell
+    if BOND[0][0][0] < 1000:
+        send_
 
 def main():
     args = parse_arguments()
@@ -39,16 +59,16 @@ def main():
     hello_message = exchange.read_message()
     print("First message from exchange:", hello_message)
 
-    # Send an order for BOND at a good price, but it is low enough that it is
-    # unlikely it will be traded against. Maybe there is a better price to
-    # pick? Also, you will need to send more orders over time.
-    exchange.send_add_message(order_id=1, symbol="BOND", dir=Dir.BUY, price=990, size=1)
+    # # Send an order for BOND at a good price, but it is low enough that it is
+    # # unlikely it will be traded against. Maybe there is a better price to
+    # # pick? Also, you will need to send more orders over time.
+    # exchange.send_add_message(order_id=1, symbol="BOND", dir=Dir.BUY, price=990, size=1)
 
-    # Set up some variables to track the bid and ask price of a symbol. Right
-    # now this doesn't track much information, but it's enough to get a sense
-    # of the VALE market.
-    vale_bid_price, vale_ask_price = None, None
-    vale_last_print_time = time.time()
+    # # Set up some variables to track the bid and ask price of a symbol. Right
+    # # now this doesn't track much information, but it's enough to get a sense
+    # # of the VALE market.
+    # vale_bid_price, vale_ask_price = None, None
+    # vale_last_print_time = time.time()
 
     # Here is the main loop of the program. It will continue to read and
     # process messages in a loop until a "close" message is received. You
@@ -107,11 +127,6 @@ def main():
 # You probably don't need to edit anything below this line, but feel free to
 # ask if you have any questions about what it is doing or how it works. If you
 # do need to change anything below this line, please feel free to
-
-
-class Dir(str, Enum):
-    BUY = "BUY"
-    SELL = "SELL"
 
 
 class ExchangeConnection:

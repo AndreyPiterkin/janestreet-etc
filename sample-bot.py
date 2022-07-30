@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ~~~~~==============   HOW TO RUN   ==============~~~~~
-# 1) Configure things in CONFIGURATION section
 # 2) Change permissions: chmod +x bot.py
+# 1) Configure things in CONFIGURATION section
 # 3) Run in loop: while true; do ./bot.py --test prod-like; sleep 1; done
 
 import argparse
@@ -32,81 +32,156 @@ team_name = "BREAKFASTBLEND"
 # code is intended to be a working example, but it needs some improvement
 # before it will start making good trades!
 
-BONDBUY= []
-BONDSELL = []
+BOND_BUY = []
+BOND_SELL = []
 
-VALBUY = []
-VALSELL = []
-VALBZBUY = []
-VALBZSELL = []
+VAL_COUNT = 0
+VALBZ_COUNT = 0
+
+VAL_BUY = []
+VAL_SELL = []
+VALBZ_BUY = []
+VALBZ_SELL = []
+
+GS_BUY = []
+GS_SELL = []
+MS_BUY = []
+MS_SELL = []
+WFC_BUY = []
+WFC_SELL = []
+XLF_SELL = []
+XLF_BUY = []
+
 
 ADR_CONVERT = 10
 XLF_CONVERT = 100
 
-currOrderId = 0
+CURR_ORDER_ID = 0
 
 RECENT_BOND_PNL = 0
 
+def handleFill(message):
+    global VALBZ_COUNT, VAL_COUNT
+    if message["symbol"] == "VALE":
+        if message["dir"] == "BUY":
+            VAL_COUNT += int(message["size"])
+        else:
+            VAL_COUNT -= int(message["size"])
+    if message["symbol"] == "VALBZ":
+        if message["dir"] == "BUY":
+            VALBZ_COUNT += int(message["size"])
+        else:
+            VALBZ_COUNT -= int(message["size"])
+
+
 def handleBook(message):
-    global BONDBUY, BONDSELL, currOrderId, VALBUY, VALSELL, VALBZBUY, VALBZSELL
+    global BOND_BUY, BOND_SELL, CURR_ORDER_ID, VAL_BUY, VAL_SELL, VALBZ_BUY, VALBZ_SELL
+    global GS_BUY, GS_SELL, MS_BUY, MS_SELL, WFC_BUY, WFC_SELL, XLF_BUY, XLF_SELL
 
     if message["symbol"] == "BOND":
-        BONDBUY = message["buy"]
-        BONDSELL = message["sell"]
+        BOND_BUY = message["buy"]
+        BOND_SELL = message["sell"]
     elif message["symbol"] == "VALE":
-        VALBUY = message["buy"]
-        VALSELL = message["sell"]
+        VAL_BUY = message["buy"]
+        VAL_SELL = message["sell"]
     elif message["symbol"] == "VALBZ":
-        VALBZBUY = message["buy"]
-        VALBZSELL = message["sell"]
-    
+        VALBZ_BUY = message["buy"]
+        VALBZ_SELL = message["sell"]
+    elif message["symbol"] == "GS":
+        GS_BUY = message["buy"]
+        GS_SELL = message["sell"]
+    elif message["symbol"] == "MS":
+        MS_BUY = message["buy"]
+        MS_SELL = message["sell"]
+    elif message["symbol"] == "WFC":
+        WFC_BUY = message["buy"]
+        WFC_SELL = message["sell"]
+    elif message["symbol"] == "XLF":
+        XLF_BUY = message["buy"]
+        XLF_SELL = message["sell"]
+
+def handleXLF(exchange):
+    global GS_BUY, GS_SELL, MS_BUY, MS_SELL, WFC_BUY, WFC_SELL, XLF_BUY, XLF_SELL
+    if GS_BUY and GS_SELL and MS_BUY and MS_SELL and WFC_BUY and WFC_SELL and XLF_BUY and XLF_SELL:
+        pricexlf = (XLF_BUY[0][0] + XLF_SELL[0][0])//2
+        pricegs = (GS_BUY[0][0] + GS_SELL[0][0]) //2
+        pricems = (MS_BUY[0][0] + MS_SELL[0][0]) //2
+        pricewfc = (WFC_BUY[0][0] + WFC_SELL[0][0])//2
+        pricebasket = (3*1000 + 2*pricegs + 3*pricems + 2*pricewfc)
+
+        if pricexlf - pricebasket > XLF_CONVERT + 2:
+            exchange.send_add_message(CURR_ORDER_ID, "GS", Dir.BUY, pricegs, 2)
+            exchange.send_add_message(CURR_ORDER_ID, "MS", Dir.BUY, pricegs, 3)
+            exchange.send_add_message(CURR_ORDER_ID, "WFC", Dir.BUY, pricegs, 2)
+            exchange.send_convert_message(CURR_ORDER_ID, "XLF", Dir.BUY, 10)
+            exchange.send_add_message(CURR_ORDER_ID, "XLF", Dir.SELL, pricexlf, 10)
+
+        if pricebasket - pricexlf > XLF_CONVERT + 2:
+            exchange.send_add_message(CURR_ORDER_ID, "XLF", Dir.BUY, pricexlf, 10)
+            exchange.send_convert_message(CURR_ORDER_ID, "XLF", Dir.SELL,  10)
+            exchange.send_add_message(CURR_ORDER_ID, "GS", Dir.SELL, pricegs, 2)
+            exchange.send_add_message(CURR_ORDER_ID, "MS", Dir.SELL, pricegs, 3)
+            exchange.send_add_message(CURR_ORDER_ID, "WFC", Dir.SELL, pricegs, 2)
+            
+            
+
 
 def handleADR(exchange):
-    global BONDBUY, BONDSELL, currOrderId, VALBUY, VALSELL, VALBZBUY, VALSELL
+    global BOND_BUY, BOND_SELL, CURR_ORDER_ID, VAL_BUY, VAL_SELL, VALBZ_BUY, VAL_SELL
         
-    if VALBUY and VALSELL and VALBZBUY and VALBZSELL:
-        priceval = (VALBUY[0][0] + VALSELL[0][0])//2
-        pricevalbz = (VALBZBUY[0][0] + VALBZSELL[0][0])//2
+    if VAL_BUY and VAL_SELL and VALBZ_BUY and VALBZ_SELL:
+        priceval = (VAL_BUY[0][0] + VAL_SELL[0][0])//2
+        pricevalbz = (VALBZ_BUY[0][0] + VALBZ_SELL[0][0])//2
         # print(priceval, pricevalbz)
-        # if priceval - pricevalbz > ADR_CONVERT + 2:
-        #     print("Bought CS")
-        #     exchange.send_add_message(currOrderId, "VALBZ", Dir.BUY, pricevalbz, 10)
-        #     currOrderId += 1
-        #     exchange.send_convert_message(currOrderId, "VALE", Dir.BUY, 10)
-        #     currOrderId += 1
-        #     exchange.send_add_message(currOrderId, "VALE", Dir.SELL, priceval, 10)
-        #     currOrderId += 1
-
+        if priceval - pricevalbz > ADR_CONVERT + 2:
+            print("Bought CS -> ADR")
+            exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.BUY, pricevalbz, 1)
+            CURR_ORDER_ID += 1
+ 
+            exchange.send_add_message(CURR_ORDER_ID, "VALE", Dir.SELL, priceval, 1)
+            CURR_ORDER_ID += 1
+           
         if pricevalbz - priceval > ADR_CONVERT + 2:
-            print("Bought ADR")
-            exchange.send_add_message(currOrderId, "VALE", Dir.BUY, priceval, 10)
-            currOrderId += 1
-            exchange.send_convert_message(currOrderId, "VALBZ", Dir.SELL, 10)
-            currOrderId += 1
-            exchange.send_add_message(currOrderId, "VALBZ", Dir.SELL, pricevalbz, 10)
-            currOrderId += 1
+            print("Bought ADR -> CS")
+            exchange.send_add_message(CURR_ORDER_ID, "VALE", Dir.BUY, priceval, 1)
+            CURR_ORDER_ID += 1
+            exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.SELL, pricevalbz, 1)   
+            CURR_ORDER_ID += 1
+        
+        if VAL_COUNT == -10 and VALBZ_COUNT == 10:
+            exchange.send_convert_message(CURR_ORDER_ID, "VALE", Dir.BUY, 10)
+            CURR_ORDER_ID += 1
+            VAL_COUNT = 0
+            VALBZ_COUNT = 0
+
+        if VAL_COUNT == 10 and VALBZ_COUNT == -10:
+            exchange.send_convert_message(CURR_ORDER_ID, "VALE", Dir.SELL, 10)
+            CURR_ORDER_ID += 1
+            VAL_COUNT = 0
+            VALBZ_COUNT = 0
 
 
 def handleBond(exchange):
-    global BONDBUY, BONDSELL, currOrderId, RECENT_BOND_PNL
+    global BOND_BUY, BOND_SELL, CURR_ORDER_ID, RECENT_BOND_PNL
     # 0 is buy
     # 1 is sell
-    if BONDBUY and BONDBUY[0][0] > 1000:
-        exchange.send_add_message(currOrderId, "BOND", Dir.SELL, 1001, 10)
-        RECENT_BOND_PNL += 10 * 1001
-        print(f"Sold {10} bonds at {1001}, new RECENT_BOND_PNL is {RECENT_BOND_PNL}.")
-        currOrderId += 1
 
-    if BONDSELL and BONDSELL[0][0] < 1000:
-        exchange.send_add_message(currOrderId, "BOND", Dir.BUY, 999, 10)
+
+
+    if BOND_BUY and BOND_BUY[0][0] > 1000:
+        exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.SELL, 1001, 10)
+        RECENT_BOND_PNL += 10 * 1001
+        CURR_ORDER_ID += 1
+
+    if BOND_SELL and BOND_SELL[0][0] < 1000:
+        exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.BUY, 999, 10)
         RECENT_BOND_PNL -= 10 * 1001
-        print(f"Bought {10} bonds at {999}, new RECENT_BOND_PNL is {RECENT_BOND_PNL}.")
-        currOrderId += 1
+        CURR_ORDER_ID += 1 
 
 def print_bond_pnl():
     global RECENT_BOND_PNL
     while True:
-        print('Bond PNL in the last minute =', RECENT_BOND_PNL)
+        print('Bond PNL in the last 15 seconds =', RECENT_BOND_PNL)
         RECENT_BOND_PNL = 0
         time.sleep(15)
 
@@ -121,8 +196,8 @@ def main():
     hello_message = exchange.read_message()
     print("First message from exchange:", hello_message)
 
-    thread = Thread(target=print_bond_pnl)
-    thread.start()
+    # thread = Thread(target=print_bond_pnl)
+    # thread.start()
     # # Send an order for BOND at a good price, but it is low enough that it is
     # # unlikely it will be traded against. Maybe there is a better price to
     # # pick? Also, you will need to send more orders over time.
@@ -161,10 +236,11 @@ def main():
         elif message["type"] == "error":
             print(message)
         elif message["type"] == "reject":
-            print(message)
+            # print(message)
             pass
         elif message["type"] == "fill":
             print("Filled: " + str(message))
+            handleFill(message)
             pass
         elif message["type"] == "book":
             handleBook(message)
@@ -178,7 +254,8 @@ def main():
     
         handleBond(exchange)
         handleADR(exchange)
-        time.sleep(0.001)
+        # handleXLF(exchange)
+        time.sleep(0.01)
             # if message["symbol"] == "VALE":
 
             #     def best_price(side):

@@ -11,12 +11,11 @@ import time
 import socket
 import json
 
-
+from threading import Thread
 
 class Dir(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
-
 
 # ~~~~~============== CONFIGURATION  ==============~~~~~
 # Replace "REPLACEME" with your team name!
@@ -46,11 +45,12 @@ XLF_CONVERT = 100
 
 currOrderId = 0
 
+RECENT_BOND_PNL = 0
+
 def handleBook(message):
-    global BONDBUY, BONDSELL, currOrderId
+    global BONDBUY, BONDSELL, currOrderId, VALBUY, VALSELL, VALBZBUY, VALBZSELL
 
     if message["symbol"] == "BOND":
-        # print("BOND MESSAGE" + str(message))
         BONDBUY = message["buy"]
         BONDSELL = message["sell"]
     elif message["symbol"] == "VALE":
@@ -62,34 +62,56 @@ def handleBook(message):
     
 
 def handleADR(exchange):
-    priceval = (VALBUY[0][0] + VALSELL[0][0])/2
-    pricevalbz = (VALBZBUY[0][0] + VALBZSELL[0][0])/2
+    global BONDBUY, BONDSELL, currOrderId, VALBUY, VALSELL, VALBZBUY, VALSELL
+        
+    if VALBUY and VALSELL and VALBZBUY and VALBZSELL:
+        priceval = (VALBUY[0][0] + VALSELL[0][0])//2
+        pricevalbz = (VALBZBUY[0][0] + VALBZSELL[0][0])//2
+        # print(priceval, pricevalbz)
+        # if priceval - pricevalbz > ADR_CONVERT + 2:
+        #     print("Bought CS")
+        #     exchange.send_add_message(currOrderId, "VALBZ", Dir.BUY, pricevalbz, 10)
+        #     currOrderId += 1
+        #     exchange.send_convert_message(currOrderId, "VALE", Dir.BUY, 10)
+        #     currOrderId += 1
+        #     exchange.send_add_message(currOrderId, "VALE", Dir.SELL, priceval, 10)
+        #     currOrderId += 1
 
-    if priceval - pricevalbz > ADR_CONVERT + 2:
-        exchange.send_add_message(currOrderId, "VALBZ", Dir.BUY, pricevalbz)
-        currOrderId += 1
-        exchange.send_convert_message()
-
+        if pricevalbz - priceval > ADR_CONVERT + 2:
+            print("Bought ADR")
+            exchange.send_add_message(currOrderId, "VALE", Dir.BUY, priceval, 10)
+            currOrderId += 1
+            exchange.send_convert_message(currOrderId, "VALBZ", Dir.SELL, 10)
+            currOrderId += 1
+            exchange.send_add_message(currOrderId, "VALBZ", Dir.SELL, pricevalbz, 10)
+            currOrderId += 1
 
 
 def handleBond(exchange):
-    global BONDBUY, BONDSELL, currOrderId
+    global BONDBUY, BONDSELL, currOrderId, RECENT_BOND_PNL
     # 0 is buy
     # 1 is sell
     if BONDBUY and BONDBUY[0][0] > 1000:
         exchange.send_add_message(currOrderId, "BOND", Dir.SELL, 1001, 10)
-        print("Sold bonds.")
-        currOrderId += 1  
+        RECENT_BOND_PNL += 10 * 1001
+        print(f"Sold {10} bonds at {1001}, new RECENT_BOND_PNL is {RECENT_BOND_PNL}.")
+        currOrderId += 1
 
     if BONDSELL and BONDSELL[0][0] < 1000:
         exchange.send_add_message(currOrderId, "BOND", Dir.BUY, 999, 10)
-        print("Bought bonds.")
-        currOrderId += 1  
+        RECENT_BOND_PNL -= 10 * 1001
+        print(f"Bought {10} bonds at {999}, new RECENT_BOND_PNL is {RECENT_BOND_PNL}.")
+        currOrderId += 1
 
+def print_bond_pnl():
+    global RECENT_BOND_PNL
+    while True:
+        print('Bond PNL in the last minute =', RECENT_BOND_PNL)
+        RECENT_BOND_PNL = 0
+        time.sleep(15)
 
 def main():
     args = parse_arguments()
-
     exchange = ExchangeConnection(args=args)
 
     # Store and print the "hello" message received from the exchange. This
@@ -99,6 +121,8 @@ def main():
     hello_message = exchange.read_message()
     print("First message from exchange:", hello_message)
 
+    thread = Thread(target=print_bond_pnl)
+    thread.start()
     # # Send an order for BOND at a good price, but it is low enough that it is
     # # unlikely it will be traded against. Maybe there is a better price to
     # # pick? Also, you will need to send more orders over time.
@@ -137,10 +161,10 @@ def main():
         elif message["type"] == "error":
             print(message)
         elif message["type"] == "reject":
-            # print(message)
+            print(message)
             pass
         elif message["type"] == "fill":
-            # print(message)
+            print("Filled: " + str(message))
             pass
         elif message["type"] == "book":
             handleBook(message)
@@ -153,7 +177,8 @@ def main():
             pass
     
         handleBond(exchange)
-        time.sleep(0.01)
+        handleADR(exchange)
+        time.sleep(0.001)
             # if message["symbol"] == "VALE":
 
             #     def best_price(side):
@@ -302,6 +327,3 @@ if __name__ == "__main__":
         except socket.error:
             print("Can't connect to socket")
             time.sleep(0.1)
-
-
-    

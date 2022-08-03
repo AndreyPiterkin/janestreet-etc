@@ -11,8 +11,6 @@ import time
 import socket
 import json
 
-from threading import Thread
-
 class Dir(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
@@ -22,7 +20,6 @@ class Dir(str, Enum):
 team_name = "BREAKFASTBLEND"
 
 # ~~~~~============== MAIN LOOP ==============~~~~~
-
 # You should put your code here! We provide some starter code as an example,
 # but feel free to change/remove/edit/update any of it as you'd like. If you
 # have any questions about the starter code, or what to do next, please ask us!
@@ -32,11 +29,10 @@ team_name = "BREAKFASTBLEND"
 # code is intended to be a working example, but it needs some improvement
 # before it will start making good trades!
 
-BOND_BUY = []
+# The _BUY lists contain the most aggressive buy orders on the market. 
+# The _SELL lists contain the most agressive sell orders on the market. 
+BOND_BUY = [] 
 BOND_SELL = []
-
-VAL_COUNT = 0
-VALBZ_COUNT = 0
 
 VAL_BUY = []
 VAL_SELL = []
@@ -52,14 +48,18 @@ WFC_SELL = []
 XLF_SELL = []
 XLF_BUY = []
 
+# Tracking the amount of VAL and VALBZ that we have. 
+VAL_COUNT = 0
+VALBZ_COUNT = 0
 
+# The conversion rates for ADR and XLF.
 ADR_CONVERT = 10
 XLF_CONVERT = 100
 
+# Since the orders we place need to have unique IDs, we have to track them.
 CURR_ORDER_ID = 0
 
-RECENT_BOND_PNL = 0
-
+# Handling fill messages, which means updating the counts when we make transcations on the market.
 def handleFill(message):
     global VALBZ_COUNT, VAL_COUNT
     if message["symbol"] == "VALE":
@@ -73,7 +73,7 @@ def handleFill(message):
         else:
             VALBZ_COUNT -= int(message["size"])
 
-
+# Handling book messages, which means updating our _BUY and _SELL lists for the securities.
 def handleBook(message):
     global BOND_BUY, BOND_SELL, CURR_ORDER_ID, VAL_BUY, VAL_SELL, VALBZ_BUY, VALBZ_SELL
     global GS_BUY, GS_SELL, MS_BUY, MS_SELL, WFC_BUY, WFC_SELL, XLF_BUY, XLF_SELL
@@ -100,14 +100,15 @@ def handleBook(message):
         XLF_BUY = message["buy"]
         XLF_SELL = message["sell"]
 
+# Handling XLF transactions, which has our algorithm to find disparities in the price of the ETF and its underlying securities.
 def handleXLF(exchange):
     global GS_BUY, GS_SELL, MS_BUY, MS_SELL, WFC_BUY, WFC_SELL, XLF_BUY, XLF_SELL
     if GS_BUY and GS_SELL and MS_BUY and MS_SELL and WFC_BUY and WFC_SELL and XLF_BUY and XLF_SELL:
-        pricexlf = (XLF_BUY[0][0] + XLF_SELL[0][0])//2
-        pricegs = (GS_BUY[0][0] + GS_SELL[0][0]) //2
-        pricems = (MS_BUY[0][0] + MS_SELL[0][0]) //2
-        pricewfc = (WFC_BUY[0][0] + WFC_SELL[0][0])//2
-        pricebasket = (3*1000 + 2*pricegs + 3*pricems + 2*pricewfc)
+        pricexlf = (XLF_BUY[0][0] + XLF_SELL[0][0]) // 2
+        pricegs = (GS_BUY[0][0] + GS_SELL[0][0]) // 2
+        pricems = (MS_BUY[0][0] + MS_SELL[0][0]) // 2
+        pricewfc = (WFC_BUY[0][0] + WFC_SELL[0][0]) // 2
+        pricebasket = (3 * 1000 + 2 * pricegs + 3 * pricems + 2 * pricewfc)
 
         if pricexlf - pricebasket > XLF_CONVERT + 2:
             exchange.send_add_message(CURR_ORDER_ID, "GS", Dir.BUY, pricegs, 2)
@@ -123,16 +124,13 @@ def handleXLF(exchange):
             exchange.send_add_message(CURR_ORDER_ID, "MS", Dir.SELL, pricegs, 3)
             exchange.send_add_message(CURR_ORDER_ID, "WFC", Dir.SELL, pricegs, 2)
             
-            
-
-
+# Handling ADR transactions, which has our algorithm to find disparities between the common stock and the ADR.           
 def handleADR(exchange):
     global BOND_BUY, BOND_SELL, CURR_ORDER_ID, VAL_BUY, VAL_SELL, VALBZ_BUY, VAL_SELL
         
     if VAL_BUY and VAL_SELL and VALBZ_BUY and VALBZ_SELL:
-        priceval = (VAL_BUY[0][0] + VAL_SELL[0][0])//2
-        pricevalbz = (VALBZ_BUY[0][0] + VALBZ_SELL[0][0])//2
-        # print(priceval, pricevalbz)
+        priceval = (VAL_BUY[0][0] + VAL_SELL[0][0]) // 2
+        pricevalbz = (VALBZ_BUY[0][0] + VALBZ_SELL[0][0]) // 2
         if priceval - pricevalbz > ADR_CONVERT +4:
             print("Bought CS -> ADR")
             exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.BUY, pricevalbz, 10)
@@ -151,28 +149,17 @@ def handleADR(exchange):
             exchange.send_add_message(CURR_ORDER_ID, "VALBZ", Dir.SELL, pricevalbz, 10)   
             CURR_ORDER_ID += 1
 
-
+# Handling bond transactions, which uses a basic penny-pinching strategy.
 def handleBond(exchange):
-    global BOND_BUY, BOND_SELL, CURR_ORDER_ID, RECENT_BOND_PNL
-    # 0 is buy
-    # 1 is sell
+    global BOND_BUY, BOND_SELL, CURR_ORDER_ID
 
     # if BOND_BUY and BOND_BUY[0][0] > 1000:
     exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.SELL, 1001, 10)
-    RECENT_BOND_PNL += 10 * 1001
     CURR_ORDER_ID += 1
 
-# if BOND_SELL and BOND_SELL[0][0] < 1000:
+    # if BOND_SELL and BOND_SELL[0][0] < 1000:
     exchange.send_add_message(CURR_ORDER_ID, "BOND", Dir.BUY, 999, 10)
-    RECENT_BOND_PNL -= 10 * 1001
     CURR_ORDER_ID += 1 
-
-def print_bond_pnl():
-    global RECENT_BOND_PNL
-    while True:
-        print('Bond PNL in the last 15 seconds =', RECENT_BOND_PNL)
-        RECENT_BOND_PNL = 0
-        time.sleep(15)
 
 def main():
     args = parse_arguments()
@@ -245,34 +232,12 @@ def main():
         handleADR(exchange)
         # handleXLF(exchange)
         time.sleep(0.01)
-            # if message["symbol"] == "VALE":
-
-            #     def best_price(side):
-            #         if message[side]:
-            #             return message[side][0][0]
-
-            #     vale_bid_price = best_price("buy")
-            #     vale_ask_price = best_price("sell")
-
-            #     now = time.time()
-
-            #     if now > vale_last_print_time + 1:
-            #         vale_last_print_time = now
-            #         print(
-            #             {
-            #                 "vale_bid_price": vale_bid_price,
-            #                 "vale_ask_price": vale_ask_price,
-            #             }
-            #         )
-
 
 # ~~~~~============== PROVIDED CODE ==============~~~~~
 
 # You probably don't need to edit anything below this line, but feel free to
 # ask if you have any questions about what it is doing or how it works. If you
 # do need to change anything below this line, please feel free to
-
-
 class ExchangeConnection:
     def __init__(self, args):
         self.message_timestamps = deque(maxlen=500)
